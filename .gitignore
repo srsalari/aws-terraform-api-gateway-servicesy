@@ -1,0 +1,20 @@
+# Terraform state files
+*.tfstate
+*.tfstate.*
+
+# Terraform module and lock files
+.terraform/
+.terraform.lock.hcl
+
+# Sensitive variable files
+*.tfvars
+*.tfvars.json
+
+# Lambda deployment packages, if generated locally
+*.zip
+
+# Log files
+*.log
+
+# OS-specific files
+.DS_Store
