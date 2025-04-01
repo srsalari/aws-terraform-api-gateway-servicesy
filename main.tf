@@ -33,9 +33,15 @@ resource "aws_iam_policy_attachment" "lambda_basic_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# S3 Bucket
+// Bucket used for Glue scripts and general services
 resource "aws_s3_bucket" "data_bucket" {
   bucket = "saeed-terraform-app-data-storage"
+  acl    = "private"
+}
+
+// Bucket used exclusively for file uploads via the process_s3 Lambda
+resource "aws_s3_bucket" "upload_bucket" {
+  bucket = "saeed-app-data-storage-2025"
   acl    = "private"
 }
 
@@ -314,6 +320,58 @@ resource "aws_iam_policy_attachment" "glue_policy_attachment" {
   policy_arn = aws_iam_policy.glue_policy.arn
 }
 
+// Policy to allow updating Lambda function code and configuration
+resource "aws_iam_policy" "lambda_update_policy" {
+  name        = "lambda_update_policy"
+  description = "Policy for updating Lambda function code and configuration"
+  policy = jsonencode({
+    Version : "2012-10-17",
+    Statement : [
+      {
+        Effect : "Allow",
+        Action : [
+          "lambda:UpdateFunctionCode",
+          "lambda:UpdateFunctionConfiguration",
+          "lambda:PublishVersion"
+        ],
+        Resource : "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_policy_attachment" "lambda_update_policy_attach" {
+  name       = "lambda_update_policy_attachment"
+  roles      = [aws_iam_role.lambda_role.name]
+  policy_arn = aws_iam_policy.lambda_update_policy.arn
+}
+
+// (Optional) Policy to allow updating S3 bucket policy, if needed
+resource "aws_iam_policy" "s3_policy_update" {
+  name        = "s3_policy_update"
+  description = "Policy to allow updating the bucket policy for data_bucket"
+  policy = jsonencode({
+    Version : "2012-10-17",
+    Statement : [
+      {
+        Effect : "Allow",
+        Action : [
+          "s3:PutBucketPolicy",
+          "s3:GetBucketPolicy",
+          "s3:ListBucket"
+        ],
+        Resource : aws_s3_bucket.data_bucket.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_policy_attachment" "s3_policy_update_attach" {
+  name       = "s3_policy_update_attachment"
+  roles      = [aws_iam_role.lambda_role.name] // Adjust if you want to allow a different role/admin user to update S3 policies
+  policy_arn = aws_iam_policy.s3_policy_update.arn
+}
+
 // IAM Role for API Gateway to access S3
 resource "aws_iam_role" "apigw_s3_role" {
   name = "apigw_s3_role"
@@ -367,13 +425,31 @@ resource "aws_s3_bucket_policy" "data_bucket_policy" {
 }
 
 output "api_url" {
-  value = aws_api_gateway_deployment.deployment.invoke_url
+  description = "Base URL for the API Gateway deployment"
+  value       = aws_api_gateway_deployment.deployment.invoke_url
 }
 
 output "glue_job_name" {
-  value = aws_glue_job.glue_job.name
+  description = "Name of the Glue job"
+  value       = aws_glue_job.glue_job.name
 }
 
 output "s3_api_url" {
-  value = "${aws_api_gateway_deployment.deployment.invoke_url}/s3"
+  description = "API endpoint URL for S3 service (listing and uploads)"
+  value       = "${aws_api_gateway_deployment.deployment.invoke_url}/s3"
+}
+
+output "data_bucket_name" {
+  description = "Name of the S3 bucket for Glue scripts and general services"
+  value       = aws_s3_bucket.data_bucket.bucket
+}
+
+output "upload_bucket_name" {
+  description = "Name of the S3 bucket used exclusively for file uploads via ProcessS3"
+  value       = aws_s3_bucket.upload_bucket.bucket
+}
+
+output "upload_api_url" {
+  description = "API endpoint URL for S3 upload service (POST method to obtain a pre-signed URL)"
+  value       = "${aws_api_gateway_deployment.deployment.invoke_url}/s3"
 }
