@@ -1,153 +1,102 @@
-# AWS Terraform Project
+# AWS Terraform Cloud Deployment Project
 
-This project provisions an AWS infrastructure using Terraform, which includes:
+## Overview
 
-- **Lambda Functions**
+This project provisions a complete AWS serverless architecture using Terraform. It deploys various AWS services including:
 
-  - `ProcessDynamoDB`: Processes DynamoDB records.
-  - `ProcessS3`: Generates pre-signed URLs to allow file uploads to an S3 bucket.
-  - `StartGlueJob`: Triggers an AWS Glue Job.
-
-- **API Gateway Endpoints**
-
-  - `/records`: A POST endpoint to work with DynamoDB (via a Lambda proxy).
-  - `/glue`: A POST endpoint to trigger a Glue job (via a Lambda proxy).
-  - `/s3`:
-    - A GET endpoint that lists objects in a private S3 bucket using an AWS Service integration.
-    - A POST endpoint that invokes the `ProcessS3` Lambda to generate pre-signed URLs for uploads.
-
-- **Other Resources**
-  - An S3 bucket for data storage.
-  - A DynamoDB table for records.
-  - An AWS Glue Job.
-  - Necessary IAM Roles, Policies, and Bucket Policies for secure access.
-
-## Pre-requisites
-
-- AWS CLI configured with valid credentials.
-- Terraform installed.
-- An AWS account.
-- (Optional) Postman or cURL installed for testing the API endpoints.
+- **AWS Lambda Functions:** For processing DynamoDB records, handling S3 file uploads, and initiating AWS Glue jobs.
+- **API Gateway:** To expose RESTful endpoints that trigger the Lambda functions.
+- **DynamoDB:** As a NoSQL database for storing records.
+- **S3 Buckets:** One for storing Glue scripts and other assets, and another dedicated for direct file uploads.
+- **AWS Glue Job:** For ETL operations.
+- **IAM Roles and Policies:** To ensure secure and controlled access between services.
 
 ## Project Structure
 
-- `main.tf`: Terraform configuration that provisions the entire stack.
-- `process_s3.py`: Lambda code to generate pre-signed URLs for S3 file uploads.
-- Other Lambda source code files (e.g., `process_dynamodb.zip`, `start_glue.zip`) must be built and available in the project directory.
+```
+.
+├── aws-terraform/
+│   ├── main.tf             # Core Terraform configuration for AWS resources
+│   ├── variables.tf        # Input variables for project configuration
+│   ├── outputs.tf          # Outputs generated after provisioning
+│   ├── readme.md           # Project documentation
+│   └── modules/
+│       └── functions/      # Module encapsulating Lambda functions and permissions
+│           ├── main.tf
+│           ├── variables.tf
+│           └── outputs.tf
+```
 
-## How to Deploy
+## Prerequisites
 
-1. **Initialize Terraform**
+- **AWS Account:** Ensure you have an active AWS account with the necessary permissions.
+- **Terraform:** Installed (version >= 0.12 recommended).
+- **AWS CLI:** Configured with proper credentials.
 
-   In the root of your project directory, run:
+## Setup and Deployment
+
+1. **Navigate to the project root:**
+
+   ```bash
+   cd /Users/saeedrezasalari/Library/CloudStorage/OneDrive-Personal/Desktop/ccproject/terraform-project2/aws-terraform
+   ```
+
+2. **Initialize Terraform:**
 
    ```bash
    terraform init
    ```
 
-2. **Plan the Deployment**
-
-   To preview the changes:
+3. **Preview the planned changes:**
 
    ```bash
    terraform plan
    ```
 
-3. **Apply the Configuration**
-
-   Deploy the resources by running:
+4. **Apply the configuration to provision resources:**
 
    ```bash
    terraform apply
    ```
 
-   Confirm when prompted. This will provision your AWS resources.
+## Modules Overview
 
-## API Endpoints
+The project uses a dedicated module for AWS Lambda functions located in the `modules/functions` directory. This module handles:
 
-The deployment creates an API Gateway listed with the following endpoints (assuming the deployment outputs):
+- Creation and deployment of Lambda functions for processing DynamoDB records, S3 interactions, and starting AWS Glue jobs.
+- Configuration of Lambda permissions that allow API Gateway to invoke these Lambda functions.
 
-- **Base URL:**  
-  The base URL is available via the output `api_url`. For example:
+## Configuration Variables
 
-  ```
-  https://<api-id>.execute-api.ca-central-1.amazonaws.com/prod
-  ```
+The project is highly configurable via the `variables.tf` file. Key variables include:
 
-- **/records:**  
-  POST method that integrates with the ProcessDynamoDB Lambda.
+- **region:** AWS region for deployment (default: `ca-central-1`).
+- **data_bucket_name:** Name of the S3 bucket for Glue scripts and shared storage.
+- **upload_bucket_name:** Name of the S3 bucket dedicated for file uploads.
+- **process_dynamodb_zip, process_s3_zip, start_glue_zip:** Filenames for Lambda function deployment packages.
+- **lambda_runtime:** Runtime environment for the Lambda functions (default: `python3.8`).
+- **glue_job_name:** Name for the AWS Glue job.
+- **glue_script_location:** Bucket path for the Glue job script.
+- **api_name:** API Gateway name.
+- **api_stage:** Deployment stage for the API Gateway.
 
-- **/glue:**  
-  POST method that integrates with the StartGlueJob Lambda.
+## Outputs
 
-- **/s3:**  
-  GET method (to list objects in the S3 bucket)  
-  POST method (invokes `ProcessS3` to generate a pre-signed URL)
+Post-deployment, Terraform outputs key information such as:
 
-  A dedicated output `s3_api_url` is provided:
-
-  ```
-  ${api_url}/s3
-  ```
-
-## Testing the Endpoints
-
-### List S3 Bucket Contents (GET `/s3`)
-
-Use cURL:
-
-```bash
-curl -X GET "$(terraform output -raw s3_api_url)"
-```
-
-This returns the S3 bucket listing in XML format.
-
-### Generate a Pre-signed URL for S3 Upload (POST `/s3`)
-
-1. **Invoke the API to Get a Pre-signed URL:**
-
-   Using Postman or cURL:
-
-   ```bash
-   curl -X POST "https://<api-id>.execute-api.ca-central-1.amazonaws.com/prod/s3" \
-        -H "Content-Type: application/json" \
-        -d '{}'
-   ```
-
-   The response body will contain a JSON string with a field `upload_url`.
-
-2. **Upload a File Using the Pre-signed URL:**
-
-   Copy the URL from the response and then use it to perform a file upload:
-
-   ```bash
-   curl -X PUT --upload-file "local_file.txt" "https://example-presigned-url.amazonaws.com/..."
-   ```
-
-   Replace the URL with the one obtained from the first call.
-
-### Other Testing Notes
-
-- **DynamoDB and Glue Endpoints:**  
-  You may test the `/records` and `/glue` endpoints similarly using cURL or Postman.  
-  For example:
-  ```bash
-  curl -X POST "https://<api-id>.execute-api.ca-central-1.amazonaws.com/prod/glue" \
-       -H "Content-Type: application/json" \
-       -d '{"job_name":"HelloWorldJob"}'
-  ```
+- The API Gateway URL (`api_url`).
+- The AWS Glue job name.
+- Bucket names for both general data and file uploads.
+- Specific API endpoints for S3 integration.
 
 ## Troubleshooting
 
-- **Region Mismatch:** Ensure that your S3 client in `process_s3.py` is set to the region where your bucket is created.
-- **Deployment Updates:** To force redeployments when resource configurations change, the Terraform deployment resource uses `triggers`.
+- **AWS Credentials:** Ensure that AWS CLI credentials are properly set up.
+- **Terraform Plan:** Always run `terraform plan` to verify changes prior to applying them.
+- **Logs and Monitoring:** Use AWS CloudWatch to monitor Lambda functions and diagnose any issues.
 
-## Cleanup
+## Conclusion
 
-After testing, you can remove the stack by running:
+This AWS Terraform project demonstrates a modular, secure, and scalable approach to cloud infrastructure provisioning. By leveraging best practices—such as centralized variable management, dedicated modules, and strict IAM policies—the project delivers an efficient, maintainable serverless architecture that supports dynamic scaling and simplified deployments.
 
-```bash
-terraform destroy
-```
-
-This README provides an overview of the resources and instructions to deploy, test, and manage your AWS-based solution using Terraform.
+Happy Deploying!
